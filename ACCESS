@@ -1,10 +1,5 @@
 --[[
 
-.dP"Y8 Yb  dP 8888b.  888888 
-`Ybo."  YbdP   8I  Yb 88__   
-o.`Y8b   8P    8I  dY 88""   
-8bodP'  dP    8888Y"  888888  v0
-
 ]]
 
 local inputservice =	game:GetService("InsertService")
@@ -4253,7 +4248,7 @@ function syde:Init(library)
 
 						if OptionText == data.StarterOption and not starterSet then
 							starterSet = true
-							dropdown.dropholder.drop.Selected.Text = OptionText
+							dropdown.dropholder.drop.selected.Text = OptionText
 							SelectedOptions = {[OptionText] = true}
 							SelectedOrder = {OptionText}
 
@@ -5323,6 +5318,20 @@ function syde:Init(library)
 			defaultParent = newParent
 		end
 
+		local function withElementParent(targetParent, callback)
+			local previousParent = defaultParent
+			defaultParent = targetParent
+
+			local packed = table.pack(pcall(callback))
+			defaultParent = previousParent
+
+			if not packed[1] then
+				error(packed[2])
+			end
+
+			return table.unpack(packed, 2, packed.n)
+		end
+
 		for _, temp in ipairs(Page:GetChildren()) do
 			if temp:IsA("Frame") then
 				temp:Destroy()
@@ -5739,74 +5748,146 @@ function syde:Init(library)
 
 		local initelement = {}
 		initelement.__TabName = tdata.Title
+		initelement.__SubPageState = nil
 
 		function initelement:SubPage(SubPage)
 			local data = {
 				Title = (SubPage and SubPage.Title) or "SubPage";
 				Description = (SubPage and SubPage.Description) or "";
-				ButtonTitle = (SubPage and SubPage.ButtonTitle) or nil;
-				ShowBackButton = SubPage == nil or SubPage.ShowBackButton ~= false;
+				ButtonTitle = (SubPage and SubPage.ButtonTitle) or ((SubPage and SubPage.Name) or "SubPage");
+				Default = SubPage ~= nil and SubPage.Default == true;
 			}
 
-			local subTabTitle = string.format("%s / %s", tdata.Title, data.Title)
-			local openTitle = data.ButtonTitle or ("Open " .. data.Title)
+			local hostPage = defaultParent
+			local state = hostPage.__SubPageState
+			if not state then
+				local nav = Instance.new("Frame")
+				nav.Name = "SubPages"
+				nav.Parent = hostPage
+				nav.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+				nav.Size = UDim2.new(1, -35, 0, 38)
+				nav.ClipsDescendants = true
 
-			local openButton = pages.page.Button:Clone()
-			openButton.Visible = true
-			openButton.Parent = Page
-			openButton.title.Text = openTitle
-			openButton.Name = openTitle
-			openButton.title.Size = UDim2.new(0, openButton.title.TextBounds.X + 15,0, 35)
-			openButton:SetAttribute("Searchable", true)
+				local navCorner = Instance.new("UICorner")
+				navCorner.CornerRadius = UDim.new(0, 10)
+				navCorner.Parent = nav
 
-			local descLabel = openButton:FindFirstChild("desc")
-			if descLabel then
-				if data.Description ~= "" then
-					descLabel.Text = data.Description
-					descLabel.Visible = true
-					descLabel.TextWrapped = true
+				local navStroke = Instance.new("UIStroke")
+				navStroke.Color = Color3.fromRGB(35, 35, 35)
+				navStroke.Transparency = 0.3
+				navStroke.Parent = nav
 
-					local function updateSize()
-						local textSize = textservice:GetTextSize(
-							descLabel.Text,
-							descLabel.TextSize,
-							descLabel.Font,
-							Vector2.new(descLabel.AbsoluteSize.X, math.huge)
-						)
+				local list = Instance.new("UIListLayout")
+				list.FillDirection = Enum.FillDirection.Horizontal
+				list.VerticalAlignment = Enum.VerticalAlignment.Center
+				list.Padding = UDim.new(0, 6)
+				list.Parent = nav
 
-						local newDescSize = UDim2.new(1, -150, 0, textSize.Y)
-						local newButtonSize = UDim2.new(openButton.Size.X.Scale, openButton.Size.X.Offset, 0, openButton.title.Size.Y.Offset + textSize.Y + 10)
+				local padding = Instance.new("UIPadding")
+				padding.PaddingLeft = UDim.new(0, 8)
+				padding.PaddingRight = UDim.new(0, 8)
+				padding.Parent = nav
 
-						tweenservice:Create(descLabel, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = newDescSize }):Play()
-						tweenservice:Create(openButton, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = newButtonSize }):Play()
-					end
+				state = {
+					Nav = nav,
+					SubPages = {},
+					Active = nil,
+				}
 
-					updateSize()
-					descLabel:GetPropertyChangedSignal("TextBounds"):Connect(updateSize)
-				else
-					descLabel.Visible = false
+				hostPage.__SubPageState = state
+				syde:updateLayout(hostPage, 7)
+			end
+
+			local subPageContainer = pages.page:Clone()
+			subPageContainer.Name = "SubPage_" .. data.Title
+			subPageContainer.Visible = false
+			subPageContainer.Parent = hostPage
+
+			for _, child in ipairs(subPageContainer:GetChildren()) do
+				if child:IsA("Frame") then
+					child:Destroy()
 				end
 			end
 
-			local subTab = tbdata:InitTab({
-				Title = subTabTitle,
-			})
+			local navButton = Instance.new("TextButton")
+			navButton.Name = data.Title
+			navButton.Parent = state.Nav
+			navButton.AutoButtonColor = false
+			navButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+			navButton.TextColor3 = Color3.fromRGB(180, 180, 180)
+			navButton.Text = data.ButtonTitle
+			navButton.Font = Enum.Font.GothamSemibold
+			navButton.TextSize = 12
+			navButton.Size = UDim2.new(0, 90, 1, -10)
 
-			openButton.interact.MouseButton1Click:Connect(function()
-				SwitchToTab(subTabTitle)
+			local buttonCorner = Instance.new("UICorner")
+			buttonCorner.CornerRadius = UDim.new(0, 8)
+			buttonCorner.Parent = navButton
+
+			task.defer(function()
+				navButton.Size = UDim2.new(0, navButton.TextBounds.X + 22, 1, -10)
 			end)
 
-			if data.ShowBackButton then
-				subTab:Button({
-					Title = "Back",
-					Description = "Return to " .. tdata.Title,
-					CallBack = function()
-						SwitchToTab(tdata.Title)
-					end
-				})
+			local subPageRecord = {
+				Name = data.Title,
+				Description = data.Description,
+				Container = subPageContainer,
+				Button = navButton,
+			}
+
+			table.insert(state.SubPages, subPageRecord)
+
+			local function switchTo(record)
+				state.Active = record
+				for _, temp in ipairs(state.SubPages) do
+					local isActive = temp == record
+					temp.Container.Visible = isActive
+					tweenservice:Create(temp.Button, TweenInfo.new(0.25, Enum.EasingStyle.Exponential), {
+						BackgroundColor3 = isActive and Color3.fromRGB(36, 36, 36) or Color3.fromRGB(25, 25, 25),
+						TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 180),
+					}):Play()
+				end
+
+				syde:updateLayout(hostPage, 7)
 			end
 
-			return subTab
+			navButton.MouseButton1Click:Connect(function()
+				switchTo(subPageRecord)
+			end)
+
+			if data.Default or state.Active == nil then
+				switchTo(subPageRecord)
+			end
+
+			local subApi = {}
+			local forwardMethods = {
+				"Button",
+				"Toggle",
+				"Slider",
+				"Keybind",
+				"TextInput",
+				"EnchancedView",
+				"Paragraph",
+				"Label",
+				"Section",
+				"Dropdown",
+				"ColorPicker",
+				"SubPage",
+			}
+
+			for _, methodName in ipairs(forwardMethods) do
+				subApi[methodName] = function(_, ...)
+					return withElementParent(subPageContainer, function()
+						return initelement[methodName](initelement, ...)
+					end)
+				end
+			end
+
+			subApi.Switch = function()
+				switchTo(subPageRecord)
+			end
+
+			return subApi
 		end
 
 
@@ -5822,7 +5903,7 @@ function syde:Init(library)
 
 			local button = pages.page.Button:Clone()
 			button.Visible = true
-			button.Parent = Page
+			button.Parent = defaultParent
 			button.title.Text = data.Title
 			button.Name = data.Title
 			button.title.Size = UDim2.new(0, button.title.TextBounds.X + 15,0, 35)
@@ -6004,7 +6085,7 @@ function syde:Init(library)
 
 			local toggle = pages.page.Toggle:Clone()
 			toggle.Visible = true
-			toggle.Parent = Page
+			toggle.Parent = defaultParent
 			toggle.title.Text = data.Title
 			toggle.Name = data.Title
 			toggle:SetAttribute("Searchable", true)
@@ -6331,7 +6412,7 @@ function syde:Init(library)
 
 			local slider = pages.page.Slider:Clone()
 			slider.Visible = true
-			slider.Parent = Page
+			slider.Parent = defaultParent
 			slider.title.Text = data.Title
 			slider.Name = data.Title
 			slider.slideholder.slider.Visible = false
@@ -6654,7 +6735,7 @@ function syde:Init(library)
 
 			local KeyBind = pages.page.KeyBind:Clone()
 			KeyBind.Visible = true
-			KeyBind.Parent = Page
+			KeyBind.Parent = defaultParent
 			KeyBind.title.Text = data.Title
 			KeyBind.Name = data.Title
 			KeyBind:SetAttribute("Searchable", true)
@@ -6743,7 +6824,7 @@ function syde:Init(library)
 
 			local textinput = pages.page.Input:Clone()
 			textinput.Visible = true
-			textinput.Parent = Page
+			textinput.Parent = defaultParent
 			textinput.Name = data.Title
 			textinput.title.Text = data.Title
 			textinput.TextFrame.TextBox.PlaceholderText = data.PlaceHolder
@@ -6876,7 +6957,7 @@ function syde:Init(library)
 
 			local EnchancedView = pages.page["3DView"]:Clone()
 			EnchancedView.Visible = true
-			EnchancedView.Parent = Page
+			EnchancedView.Parent = defaultParent
 			EnchancedView.Title.Text = Viewdata.Title
 			EnchancedView:SetAttribute("Searchable", true)
 
@@ -7162,7 +7243,7 @@ function syde:Init(library)
 
 			local Para = pages.page.Paragraph:Clone()
 			Para.Visible = true
-			Para.Parent = Page
+			Para.Parent = defaultParent
 			Para.Frame.title.Text = ParaData.Title
 			Para.Content.Text = ParaData.Content
 			Para:SetAttribute("Searchable", true)
@@ -7197,7 +7278,7 @@ function syde:Init(library)
 
 			local Label = pages.page.Label:Clone()
 			Label.Visible = true
-			Label.Parent = Page
+			Label.Parent = defaultParent
 			Label.text.Text = Text
 			Label:SetAttribute("Searchable", true)
 
@@ -7218,7 +7299,7 @@ function syde:Init(library)
 			local Section =  pages.page.Section:Clone()
 			Section.Visible = true
 			Section.Title.Text = Title
-			Section.Parent = Page
+			Section.Parent = defaultParent
 			Section.Title.Position = UDim2.new(0, 0,0, 0)
 
 			if Icon then
@@ -7242,7 +7323,7 @@ function syde:Init(library)
 
 			local dropdown = pages.page.Dropdown:Clone()
 			dropdown.Visible = true
-			dropdown.Parent = Page
+			dropdown.Parent = defaultParent
 			dropdown.title.Text = data.Title
 			dropdown.Name = data.Title
 			dropdown.dropholder.drop.Container.Option.Visible = false
@@ -7489,7 +7570,7 @@ function syde:Init(library)
 
 					if OptionText == data.StarterOption and not starterSet then
 						starterSet = true
-						dropdown.dropholder.drop.Selected.Text = OptionText
+						dropdown.dropholder.drop.selected.Text = OptionText
 						SelectedOptions = {[OptionText] = true}
 						SelectedOrder = {OptionText}
 
@@ -7570,7 +7651,7 @@ function syde:Init(library)
 
 			local colorpicker = pages.page.ColorPicker:Clone()
 			colorpicker.Visible = true
-			colorpicker.Parent = Page
+			colorpicker.Parent = defaultParent
 			colorpicker.title.Text = data.Title
 			colorpicker.Name = data.Title
 			colorpicker:SetAttribute("Searchable", true)
@@ -8365,7 +8446,7 @@ function syde:Init(library)
 					-- colorpicker.HueValues.Link.Frame.Position = UDim2.new(0, mouse.X - colorpicker.AbsolutePosition.X - 50, 0, mouse.Y - colorpicker.AbsolutePosition.Y - 260)
 					TweenService:Create(colorpicker.HueValues.Link.Frame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Position = UDim2.new(0, mouse.X - colorpicker.AbsolutePosition.X - 50, 0, mouse.Y - colorpicker.AbsolutePosition.Y - 260) }):Play()
 
-					for _, otherPicker in pairs(Page:GetChildren()) do
+					for _, otherPicker in pairs(defaultParent:GetChildren()) do
 						if otherPicker:IsA("Frame") and otherPicker:FindFirstChild("isLinkable") and otherPicker.isLinkable.Value then
 							if isMouseOver(otherPicker) and otherPicker ~= draggedColorPicker then
 								TweenService:Create(otherPicker.UIStroke, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), {Transparency = 0}):Play()
@@ -8382,7 +8463,7 @@ function syde:Init(library)
 					linkDragging = false
 					local foundTarget = false
 
-					for _, otherPicker in pairs(Page:GetChildren()) do
+					for _, otherPicker in pairs(defaultParent:GetChildren()) do
 						if otherPicker:IsA("Frame") and otherPicker:FindFirstChild("isLinkable") and otherPicker.isLinkable.Value then
 							if isMouseOver(otherPicker) and otherPicker ~= draggedColorPicker then
 								otherPicker.HueSat.Value = draggedColorPicker.HueSat.Value
