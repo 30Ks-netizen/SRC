@@ -1,5 +1,10 @@
 --[[
 
+.dP"Y8 Yb  dP 8888b.  888888 
+`Ybo."  YbdP   8I  Yb 88__   
+o.`Y8b   8P    8I  dY 88""   
+8bodP'  dP    8888Y"  888888  v0
+
 ]]
 
 local inputservice =	game:GetService("InsertService")
@@ -5877,8 +5882,9 @@ function syde:Init(library)
 
 			for _, methodName in ipairs(forwardMethods) do
 				subApi[methodName] = function(_, ...)
+					local args = table.pack(...)
 					return withElementParent(subPageContainer, function()
-						return initelement[methodName](initelement, ...)
+						return initelement[methodName](initelement, table.unpack(args, 1, args.n))
 					end)
 				end
 			end
